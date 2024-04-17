@@ -2,18 +2,20 @@
 #ifndef __WJCL_HASH_MAP_H__
 #define __WJCL_HASH_MAP_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../list/wjcl_linked_list.h"
+#include "../memory/wjcl_mem_track_util.h"
+
 #define WJCL_HASH_MAP_DEFAULT_CAPACITY 16
 // 1 << 30
 #define WJCL_HASH_MAP_MAXIMUM_CAPACITY 1073741824
 #define WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR 0.75f
 #define WJCL_HASH_MAP_FREE_KEY 0b10
 #define WJCL_HASH_MAP_FREE_VALUE 0b01
-
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-#include "../list/wjcl_linked_list.h"
 
 typedef struct NodeInfo {
     bool (*equalsFunction)(void*, void*);
@@ -39,7 +41,7 @@ typedef struct MapNode {
 static MapNode emptyMapNode = {0, 0, 0};
 
 #define map_create(info) \
-    (Map) { calloc(WJCL_HASH_MAP_DEFAULT_CAPACITY, sizeof(LinkedList)), 0, 0, WJCL_HASH_MAP_DEFAULT_CAPACITY, WJCL_HASH_MAP_DEFAULT_CAPACITY *WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR, info }
+    { NULL, 0, 0, 0, 0, info }
 
 /**
  * @brief Foreach all entries in map
@@ -67,17 +69,22 @@ Map* map_new();
  * @param value Value pointer (pointer will not be freed when the node is deleted)
  */
 MapNode* map_putpp(Map* map, void* key, void* value);
+void map_delete(Map* map, void* key);
 void* map_get(Map* map, void* key);
 void map_clear(Map* map);
 void map_free(Map* map);
 
 // Implementation
+// #define WJCL_HASH_MAP_IMPLEMENTATION
 #ifdef WJCL_HASH_MAP_IMPLEMENTATION
+#ifndef WJCL_LINKED_LIST_IMPLEMENTATION
+#error "WJCL-HashMap require WJCL-LinkedList, use `#define WJCL_LINKED_LIST_IMPLEMENTATION` to import"
+#endif
 
 Map* map_new(NodeInfo info) {
-    Map* map = (Map*)malloc(sizeof(Map));
+    Map* map = (Map*)__malloc(sizeof(Map));
     map->bucketSize = WJCL_HASH_MAP_DEFAULT_CAPACITY;
-    map->buckets = (LinkedList*)calloc(map->bucketSize, sizeof(LinkedList));
+    map->buckets = (LinkedList*)__calloc(map->bucketSize, sizeof(LinkedList));
     map->size = 0;
     map->bukketUsed = 0;
     map->expandSize = map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
@@ -90,10 +97,12 @@ void expandBucket(Map* map) {
     size_t newLength = map->bucketSize << 1;
     if (newLength > WJCL_HASH_MAP_MAXIMUM_CAPACITY)
         newLength = WJCL_HASH_MAP_MAXIMUM_CAPACITY;
+    else if (newLength == 0)
+        newLength = WJCL_HASH_MAP_DEFAULT_CAPACITY;
 
     // Expand buckets
     map->expandSize = newLength * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
-    map->buckets = (LinkedList*)realloc(map->buckets, newLength * sizeof(LinkedList));
+    map->buckets = (LinkedList*)__realloc(map->buckets, newLength * sizeof(LinkedList));
     memset(map->buckets + map->bucketSize, 0, (newLength - map->bucketSize) * sizeof(LinkedList));
     map->bucketSize = newLength;
 
@@ -123,6 +132,7 @@ void expandBucket(Map* map) {
 }
 
 LinkedListNode* map_getMapNode(Map* map, void* key, uint32_t hashCode) {
+    if (!map->bucketSize) return NULL;
     LinkedList* list = map->buckets + (hashCode & (map->bucketSize - 1));
     if (list->length == 0) return NULL;
     // find
@@ -147,18 +157,19 @@ MapNode* map_putpp(Map* map, void* key, void* value) {
     uint32_t hashCode = map->info.hashFunction(key);
     LinkedListNode* linkedListNode = map_getMapNode(map, key, hashCode);
     MapNode* node;
-    // Add new node
+
+    // Replace node
     if (linkedListNode && linkedListNode->value) {
         node = (MapNode*)linkedListNode->value;
         if (map->info.onNodeDelete) map->info.onNodeDelete(node->key, node->value);
-        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) free(node->key);
-        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) free(node->value);
+        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) __free(node->key);
+        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) __free(node->value);
         node->key = key;
         node->value = value;
     }
-    // Replace node
+    // Add new node
     else {
-        node = (MapNode*)malloc(sizeof(MapNode));
+        node = (MapNode*)__malloc(sizeof(MapNode));
         node->key = key;
         node->keyHash = hashCode;
         node->value = value;
@@ -173,18 +184,20 @@ MapNode* map_putpp(Map* map, void* key, void* value) {
 
 static inline void map_freeMapNode(Map* map, MapNode* entry) {
     if (map->info.onNodeDelete) map->info.onNodeDelete(entry->key, entry->value);
-    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) free(entry->key);
-    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) free(entry->value);
+    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) __free(entry->key);
+    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) __free(entry->value);
 
-    free(entry);
+    __free(entry);
 }
 
 void map_delete(Map* map, void* key) {
     uint32_t hashCode = map->info.hashFunction(key);
     LinkedListNode* node = map_getMapNode(map, key, hashCode);
+    if (!node) return;
     map_freeMapNode(map, (MapNode*)node->value);
     LinkedList* list = map->buckets + (hashCode & (map->bucketSize - 1));
     linkedList_deleteNode(list, node);
+    --map->size;
 }
 
 void map_clear(Map* map) {
@@ -193,13 +206,8 @@ void map_clear(Map* map) {
         LinkedListNode* node = bucket->first;
         while (node) {
             LinkedListNode* nextNode = node->next;
-            MapNode* entry = (MapNode*)node->value;
-            if (map->info.onNodeDelete) map->info.onNodeDelete(entry->key, entry->value);
-            if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) free(entry->key);
-            if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) free(entry->value);
-
-            free(entry);
-            free(node);
+            map_freeMapNode(map, (MapNode*)node->value);
+            __free(node);
             node = nextNode;
         }
     }
@@ -207,7 +215,7 @@ void map_clear(Map* map) {
     map->bukketUsed = 0;
     map->bucketSize = WJCL_HASH_MAP_DEFAULT_CAPACITY;
     map->expandSize = map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
-    map->buckets = (LinkedList*)realloc(map->buckets, map->bucketSize * sizeof(LinkedList));
+    map->buckets = (LinkedList*)__realloc(map->buckets, map->bucketSize * sizeof(LinkedList));
     memset(map->buckets, 0, map->bucketSize * sizeof(LinkedList));
 }
 
@@ -218,11 +226,11 @@ void map_free(Map* map) {
         while (node) {
             LinkedListNode* nextNode = node->next;
             map_freeMapNode(map, (MapNode*)node->value);
-            free(node);
+            __free(node);
             node = nextNode;
         }
     }
-    free(map->buckets);
+    __free(map->buckets);
 }
 
 void map_printTable(Map* map) {

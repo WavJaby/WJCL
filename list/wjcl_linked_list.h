@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "../memory/wjcl_mem_track_util.h"
+
 typedef struct LinkedListNode {
     struct LinkedListNode* previous;
     struct LinkedListNode* next;
@@ -28,7 +30,7 @@ typedef struct LinkedList {
  * @param list LinkedList pointer
  * @param value Value
  */
-#define linkedList_add(list, value) *(typeof(value)*)linkedList_addp(list, 1, malloc(sizeof(value))) = value
+#define linkedList_add(list, value) *(typeof(value)*)linkedList_addp(list, 1, __malloc(sizeof(value))) = value
 
 /**
  * @brief Add a pointer to linked list
@@ -71,17 +73,18 @@ LinkedList* linkedList_new();
 void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value);
 
 // Implementation
+// #define WJCL_LINKED_LIST_IMPLEMENTATION
 #ifdef WJCL_LINKED_LIST_IMPLEMENTATION
 
 LinkedList* linkedList_new() {
-    LinkedList* list = (LinkedList*)malloc(sizeof(LinkedList));
+    LinkedList* list = (LinkedList*)__malloc(sizeof(LinkedList));
     list->first = list->last = NULL;
     list->length = 0;
     return list;
 }
 
 void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value) {
-    LinkedListNode* node = (LinkedListNode*)malloc(sizeof(LinkedListNode));
+    LinkedListNode* node = (LinkedListNode*)__malloc(sizeof(LinkedListNode));
     node->freeFlag = freeFlag;
     node->next = NULL;
     if (list->first == NULL) {
@@ -152,8 +155,8 @@ void linkedList_deleteNode(LinkedList* list, LinkedListNode* node) {
         list->last = node->previous;
     --(list->length);
     if (node->freeFlag)
-        free(node->value);
-    free(node);
+        __free(node->value);
+    __free(node);
 }
 
 void linkedList_freeA(LinkedList* list, void (*freeValue)(void* value)) {
@@ -163,8 +166,8 @@ void linkedList_freeA(LinkedList* list, void (*freeValue)(void* value)) {
         if (freeValue)
             freeValue(node->value);
         if (node->freeFlag)
-            free(node->value);
-        free(node);
+            __free(node->value);
+        __free(node);
         node = nextNode;
     }
     list->first = NULL;
