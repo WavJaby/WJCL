@@ -18,9 +18,9 @@ typedef struct ListT {
 } ListT;
 
 #define listT_create(type) \
-    { NULL, 0, 0, sizeof(type) }
+    (ListT) { NULL, 0, 0, sizeof(type) }
 
-#define listT_new(type) listT_new(sizeof(type))
+#define listT_new(type) listT_newA(sizeof(type))
 
 #define listT_add(list, value) ({                                               \
     if ((list)->length == (list)->_len) listT_extend(list);                     \
@@ -31,19 +31,17 @@ typedef struct ListT {
 
 #define listT_get(list, type, index) *(type*)listT_getPtr(list, index)
 
-#define listT_foreach(list, type, varName, callBack) ({                  \
+#define listT_foreach(list, type, varName, callBack)                     \
     for (size_t __index = 0; __index < (list)->length; ++__index) {      \
         type varName = *(type*)((list)->i + __index * (list)->itemSize); \
         callBack;                                                        \
-    }                                                                    \
-})
+    }
 
-#define listT_foreachPtr(list, type, varName, callBack) ({          \
+#define listT_foreachPtr(list, type, varName, callBack)             \
     for (size_t __index = 0; __index < (list)->length; ++__index) { \
         type varName = (list)->i + __index * (list)->itemSize;      \
         callBack;                                                   \
-    }                                                               \
-})
+    }
 
 #define listT_clear(list) listT_clearA(list, NULL)
 #define listT_free(list) listT_freeA(list, NULL)
@@ -63,7 +61,7 @@ void listT_extend(ListT* list) {
 #endif
 }
 
-ListT* listT_new(size_t itemSize) {
+ListT* listT_newA(size_t itemSize) {
     ListT* list = (ListT*)malloc(sizeof(ListT));
     list->_len = WJCL_LIST_TYPE_INIT_LENGTH;
     list->length = 0;

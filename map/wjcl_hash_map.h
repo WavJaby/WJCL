@@ -41,7 +41,7 @@ typedef struct MapNode {
 static MapNode emptyMapNode = {0, 0, 0};
 
 #define map_create(info) \
-    { NULL, 0, 0, 0, 0, info }
+    (Map) { NULL, 0, 0, 0, 0, info }
 
 /**
  * @brief Foreach all entries in map
