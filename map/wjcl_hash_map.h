@@ -49,7 +49,7 @@ static MapNode emptyMapNode = {0, 0, 0};
  * @param var Map entry variable name
  * @param each Call at each map entry
  */
-#define map_entries(map, var, each) ({                                                \
+#define map_entries(map, var, each)                                                   \
     for (size_t __entryIndex = 0; __entryIndex < (map)->bucketSize; __entryIndex++) { \
         LinkedListNode* __bucket = ((map)->buckets + __entryIndex)->first;            \
         while (__bucket) {                                                            \
@@ -57,8 +57,7 @@ static MapNode emptyMapNode = {0, 0, 0};
             each;                                                                     \
             __bucket = __bucket->next;                                                \
         }                                                                             \
-    }                                                                                 \
-})
+    }
 
 // Methods
 Map* map_new();

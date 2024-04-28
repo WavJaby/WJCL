@@ -43,23 +43,25 @@ typedef struct LinkedList {
 
 #define linkedList_getPtr(list, index) linkedList_getNode(list, index)->value
 
-#define linkedList_foreach(list, type, varName, callBack) ({ \
-    LinkedListNode* node = (list)->first;                    \
-    while (node) {                                           \
-        type varName = *(type*)node->value;                  \
-        callBack;                                            \
-        node = (node)->next;                                 \
-    }                                                        \
-})
+#define linkedList_foreach(list, variable, callBack)    \
+    {                                                   \
+        LinkedListNode* node = (list)->first;           \
+        while (node) {                                  \
+            variable = *(typeof(variable)*)node->value; \
+            callBack;                                   \
+            node = (node)->next;                        \
+        }                                               \
+    }
 
-#define linkedList_foreachPtr(list, type, varName, callBack) ({ \
-    LinkedListNode* node = (list)->first;                       \
-    while (node) {                                              \
-        type varName = node->value;                             \
-        callBack;                                               \
-        node = (node)->next;                                    \
-    }                                                           \
-})
+#define linkedList_foreachPtr(list, variable, callBack) \
+    {                                                   \
+        LinkedListNode* node = (list)->first;           \
+        while (node) {                                  \
+            variable = node->value;                     \
+            callBack;                                   \
+            node = (node)->next;                        \
+        }                                               \
+    }
 
 #define linkedList_free(list) linkedList_freeA(list, NULL)
 
@@ -141,8 +143,8 @@ void linkedList_removeNode(LinkedList* list, LinkedListNode* node) {
 
 /**
  * @brief Free node value if flag set, and free node
- * @param list 
- * @param node 
+ * @param list
+ * @param node
  */
 void linkedList_deleteNode(LinkedList* list, LinkedListNode* node) {
     if (node->previous)
