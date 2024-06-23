@@ -54,21 +54,24 @@ void listT_freeA(ListT* list, void (*freeValue)(void* value));
 #ifdef WJCL_LIST_TYPE_IMPLEMENTATION
 
 void listT_extend(ListT* list) {
-    void* newArray = list->i = newArray = realloc(list->i, (list->_len *= 1.5) * list->itemSize);
+    if (list->_len == 0) list->_len = WJCL_LIST_TYPE_INIT_LENGTH;
+    else list->_len *= 1.5;
+    list->i = realloc(list->i, list->_len * list->itemSize);
+
 #ifdef WJCL_LIST_PRINT_ERROR
-    if (newArray == NULL)
+    if (list->i == NULL)
         fprintf(stderr, "[ListT ERROR] List realloc failed!");
 #endif
 }
 
 ListT* listT_newA(size_t itemSize) {
     ListT* list = (ListT*)malloc(sizeof(ListT));
-    list->_len = WJCL_LIST_TYPE_INIT_LENGTH;
+    list->_len = 0;
     list->length = 0;
     list->itemSize = itemSize;
-    void* array = list->i = malloc(list->_len * list->itemSize);
+    list->i = NULL;
 #ifdef WJCL_LIST_PRINT_ERROR
-    if (array == NULL)
+    if (list->i == NULL)
         fprintf(stderr, "[ListT ERROR] List realloc failed!");
 #endif
     return list;
@@ -78,16 +81,14 @@ void listT_clearA(ListT* list, void (*freeValue)(void* value)) {
     if (freeValue)
         for (size_t i = 0; i < list->length; ++i)
             freeValue((void*)(list->i + i * list->itemSize));
-
     list->_len = WJCL_LIST_TYPE_INIT_LENGTH;
     list->length = 0;
-    void* newArray = realloc(list->i, WJCL_LIST_TYPE_INIT_LENGTH * list->itemSize);
+    list->i = realloc(list->i, list->_len * list->itemSize);
 #ifdef WJCL_LIST_PRINT_ERROR
-    if (newArray == NULL)
+    if (list->i == NULL)
         fprintf(stderr, "[ListT ERROR] List realloc failed!");
     else
 #endif
-        list->i = newArray;
 }
 
 void listT_freeA(ListT* list, void (*freeValue)(void* value)) {
@@ -95,6 +96,9 @@ void listT_freeA(ListT* list, void (*freeValue)(void* value)) {
         for (size_t i = 0; i < list->length; ++i)
             freeValue(*(void**)(list->i + i * list->itemSize));
     free(list->i);
+    list->_len = 0;
+    list->length = 0;
+    list->i = NULL;
 }
 
 #endif /* WJCL_LIST_TYPE_IMPLEMENTATION */

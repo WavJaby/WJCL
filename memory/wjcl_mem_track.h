@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MEM_TRACK
+// #define MEM_TRACK
 #ifdef MEM_TRACK
 void* (*untrackedMalloc)(size_t __size) = malloc;
 void* (*untrackedCalloc)(size_t __nmemb, size_t __size) = calloc;
@@ -32,18 +32,14 @@ uint32_t memPtrHash(void* a) {
     return (uint32_t)(*(size_t*)a) + (uint32_t)((*(size_t*)a) >> 32);
 }
 
-void memInfoFree(void* key, void* value) {
-    MemInfo* info = (MemInfo*)value;
-}
+// void memInfoFree(void* key, void* value) {
+//     MemInfo* info = (MemInfo*)value;
+// }
 
-const NodeInfo memTableInfo = {
-    .equalsFunction = memPtrEquals,
-    .hashFunction = memPtrHash,
-    .onNodeDelete = NULL,
-    .freeFlag = WJCL_HASH_MAP_FREE_KEY | WJCL_HASH_MAP_FREE_VALUE,
-};
-
-Map memTable = map_create(memTableInfo);
+Map memTable = map_create(memPtrEquals,
+                          memPtrHash,
+                          NULL,
+                          WJCL_HASH_MAP_FREE_KEY | WJCL_HASH_MAP_FREE_VALUE);
 
 void* newMem(const char* fileName, int line, size_t size, void* ptr) {
     MemInfo* info = (MemInfo*)untrackedMalloc(sizeof(MemInfo));
@@ -63,12 +59,12 @@ void* reMem(const char* fileName, int line, void* ptr, size_t size) {
         map_delete(&memTable, &ptr);
         return newPtr;
     }
-    // ptr changed
+    // ptr changed or create
     if (newPtr != ptr) {
-        map_delete(&memTable, &ptr);
+        if (ptr) map_delete(&memTable, &ptr);
         newMem(fileName, line, size, newPtr);
     }
-    // create or change size
+    // change size
     else {
         MemInfo* info = (MemInfo*)map_get(&memTable, &newPtr);
         if (!info)
@@ -86,30 +82,31 @@ void freeMem(void* ptr) {
 
 void printSize(size_t size) {
     if (size > 1000000000)
-        printf("%.3llf(GB)\n", size / 1000000000.0);
+        printf("%.3lf(GB)\n", size / 1000000000.0);
     else if (size > 1000000)
-        printf("%.3llf(MB)\n", size / 1000000.0);
+        printf("%.3lf(MB)\n", size / 1000000.0);
     else if (size > 1000)
-        printf("%.3llf(KB)\n", size / 1000.0);
+        printf("%.3lf(KB)\n", size / 1000.0);
     else
         printf("%llu(Bytes)\n", size);
 }
 
 void memTrackResult() {
-    printf("Not freed ptr: %d\n", memTable.size);
+    printf("Not freed ptr: %llu\n", memTable.size);
     size_t wastedSize = 0;
-    map_entries(&memTable, entries, {
+    map_entries(&memTable, entries) {
         MemInfo* info = (MemInfo*)entries->value;
         wastedSize += info->size;
         printf("%s:%d: ", info->fileName, info->lineno);
         printSize(info->size);
-    });
+    }
     printf("Wasted size: ");
     printSize(wastedSize);
 }
 
 #define memTrackResult() memTrackResult()
-
+#else
+#define memTrackResult()
 #endif
 
 #endif

@@ -48,8 +48,8 @@ typedef struct LinkedList {
         LinkedListNode* node = (list)->first;           \
         while (node) {                                  \
             variable = *(typeof(variable)*)node->value; \
-            callBack;                                   \
             node = (node)->next;                        \
+            callBack;                                   \
         }                                               \
     }
 
@@ -58,8 +58,8 @@ typedef struct LinkedList {
         LinkedListNode* node = (list)->first;           \
         while (node) {                                  \
             variable = node->value;                     \
-            callBack;                                   \
             node = (node)->next;                        \
+            callBack;                                   \
         }                                               \
     }
 
@@ -162,6 +162,7 @@ void linkedList_deleteNode(LinkedList* list, LinkedListNode* node) {
 }
 
 void linkedList_freeA(LinkedList* list, void (*freeValue)(void* value)) {
+    if (!list) return;
     LinkedListNode* node = list->first;
     while (node) {
         LinkedListNode* nextNode = node->next;

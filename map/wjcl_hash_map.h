@@ -17,12 +17,12 @@
 #define WJCL_HASH_MAP_FREE_KEY 0b10
 #define WJCL_HASH_MAP_FREE_VALUE 0b01
 
-typedef struct NodeInfo {
+typedef struct MapNodeInfo {
     bool (*equalsFunction)(void*, void*);
     uint32_t (*hashFunction)(void*);
     void (*onNodeDelete)(void*, void*);
     uint8_t freeFlag;
-} NodeInfo;
+} MapNodeInfo;
 
 typedef struct Map {
     LinkedList* buckets;
@@ -30,7 +30,7 @@ typedef struct Map {
     size_t bukketUsed;
     size_t bucketSize;
     size_t expandSize;
-    NodeInfo info;
+    MapNodeInfo info;
 } Map;
 
 typedef struct MapNode {
@@ -38,26 +38,27 @@ typedef struct MapNode {
     uint32_t keyHash;
     void* value;
 } MapNode;
-static MapNode emptyMapNode = {0, 0, 0};
 
-#define map_create(info) \
-    (Map) { NULL, 0, 0, 0, 0, info }
+#define map_create(equalsFunction, hashFunction, onNodeDelete, freeFlag)           \
+    {                                                                              \
+        NULL, 0, 0, 0, 0, { equalsFunction, hashFunction, onNodeDelete, freeFlag } \
+    }
+
+#define map_createFromInfo(info)                                                                       \
+    {                                                                                                  \
+        NULL, 0, 0, 0, 0, { info.equalsFunction, info.hashFunction, info.onNodeDelete, info.freeFlag } \
+    }
 
 /**
  * @brief Foreach all entries in map
  * @param map Hash map
  * @param var Map entry variable name
- * @param each Call at each map entry
  */
-#define map_entries(map, var, each)                                                   \
-    for (size_t __entryIndex = 0; __entryIndex < (map)->bucketSize; __entryIndex++) { \
-        LinkedListNode* __bucket = ((map)->buckets + __entryIndex)->first;            \
-        while (__bucket) {                                                            \
-            MapNode* var = (MapNode*)__bucket->value;                                 \
-            each;                                                                     \
-            __bucket = __bucket->next;                                                \
-        }                                                                             \
-    }
+#define map_entries(map, var)                                                            \
+    for (size_t __entryIndex = 0; __entryIndex < (map)->bucketSize; __entryIndex++)      \
+        for (MapNode* __bucket = (MapNode*)((map)->buckets + __entryIndex)->first, *var; \
+             __bucket ? (var = (MapNode*)((LinkedListNode*)__bucket)->value) : NULL;     \
+             __bucket = (MapNode*)((LinkedListNode*)__bucket)->next)
 
 // Methods
 Map* map_new();
@@ -80,7 +81,7 @@ void map_free(Map* map);
 #error "WJCL-HashMap require WJCL-LinkedList, use `#define WJCL_LINKED_LIST_IMPLEMENTATION` to import"
 #endif
 
-Map* map_new(NodeInfo info) {
+Map* map_new(MapNodeInfo info) {
     Map* map = (Map*)__malloc(sizeof(Map));
     map->bucketSize = WJCL_HASH_MAP_DEFAULT_CAPACITY;
     map->buckets = (LinkedList*)__calloc(map->bucketSize, sizeof(LinkedList));
