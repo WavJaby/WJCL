@@ -17,6 +17,7 @@ typedef char* string;
 // Method
 string strNew(const char* str);
 string strFromFormat(const char* fmt, ...);
+string strFromFormatV(const char* fmt, va_list argv);
 void strAdd(string* dst, const string res);
 void strAddC(string* dst, const char* res);
 void strAddFormat(string* out, const char* fmt, ...);
@@ -97,8 +98,15 @@ void strAddFormat(string* out, const char* fmt, ...) {
 }
 
 string strFromFormat(const char* fmt, ...) {
-    va_list ap, cpy;
+    va_list ap;
     va_start(ap, fmt);
+    string out = strFromFormatV(fmt, ap);
+    va_end(ap);
+    return out;
+}
+
+string strFromFormatV(const char* fmt, va_list argv) {
+    va_list cpy;
 
     char staticbuf[1024], *buf = staticbuf;
     size_t buflen = strlen(fmt) * 2;
@@ -111,7 +119,7 @@ string strFromFormat(const char* fmt, ...) {
 
     while (1) {
         buf[buflen - 2] = '\0';
-        va_copy(cpy, ap);
+        va_copy(cpy, argv);
         vsnprintf(buf, buflen, fmt, cpy);
         va_end(cpy);
         if (buf[buflen - 2] != '\0') {
@@ -123,7 +131,6 @@ string strFromFormat(const char* fmt, ...) {
         }
         break;
     }
-    va_end(ap);
 
     string out = strNew(buf);
     if (buf != staticbuf) free(buf);
