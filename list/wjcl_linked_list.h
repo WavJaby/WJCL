@@ -9,7 +9,7 @@
 #include "../memory/wjcl_mem_track_util.h"
 
 typedef struct LinkedListNode {
-    struct LinkedListNode* previous;
+    struct LinkedListNode* prev;
     struct LinkedListNode* next;
     void* value;
     // Flag for freeing value
@@ -30,7 +30,7 @@ typedef struct LinkedList {
  * @param list LinkedList pointer
  * @param value Value
  */
-#define linkedList_add(list, value) *(typeof(value)*)linkedList_addp(list, 1, __malloc(sizeof(value))) = value
+#define linkedList_add(list, value) *(typeof(value)*)linkedList_addp(list, 1, __malloc(sizeof(typeof(value)))) = value
 
 /**
  * @brief Add a pointer to linked list
@@ -43,25 +43,9 @@ typedef struct LinkedList {
 
 #define linkedList_getPtr(list, index) linkedList_getNode(list, index)->value
 
-#define linkedList_foreach(list, variable, callBack)    \
-    {                                                   \
-        LinkedListNode* node = (list)->first;           \
-        while (node) {                                  \
-            variable = *(typeof(variable)*)node->value; \
-            node = (node)->next;                        \
-            callBack;                                   \
-        }                                               \
-    }
+#define linkedList_foreach(list, node) for (LinkedListNode* node = (list)->first; node; node = node->next)
 
-#define linkedList_foreachPtr(list, variable, callBack) \
-    {                                                   \
-        LinkedListNode* node = (list)->first;           \
-        while (node) {                                  \
-            variable = node->value;                     \
-            node = (node)->next;                        \
-            callBack;                                   \
-        }                                               \
-    }
+#define linkedList_nodeVal(type, node) *(type*)node->value
 
 #define linkedList_free(list) linkedList_freeA(list, NULL)
 
@@ -90,10 +74,10 @@ void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value) {
     node->freeFlag = freeFlag;
     node->next = NULL;
     if (list->first == NULL) {
-        node->previous = NULL;
+        node->prev = NULL;
         list->last = list->first = node;
     } else {
-        node->previous = list->last;
+        node->prev = list->last;
         list->last->next = node;
         list->last = node;
     }
@@ -104,10 +88,10 @@ void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value) {
 void linkedList_appendNode(LinkedList* list, LinkedListNode* node) {
     node->next = NULL;
     if (list->first == NULL) {
-        node->previous = NULL;
+        node->prev = NULL;
         list->last = list->first = node;
     } else {
-        node->previous = list->last;
+        node->prev = list->last;
         list->last->next = node;
         list->last = node;
     }
@@ -120,7 +104,7 @@ LinkedListNode* linkedList_getNode(LinkedList* list, size_t index) {
     if (index > list->length / 2) {
         node = list->last;
         for (size_t i = list->length - 1; i > index; --i)
-            node = node->previous;
+            node = node->prev;
     } else {
         node = list->first;
         for (size_t i = 0; i < index; ++i)
@@ -130,14 +114,16 @@ LinkedListNode* linkedList_getNode(LinkedList* list, size_t index) {
 }
 
 void linkedList_removeNode(LinkedList* list, LinkedListNode* node) {
-    if (node->previous)
-        node->previous->next = node->next;
+    if (!node) return;
+    
+    if (node->prev)
+        node->prev->next = node->next;
     else
         list->first = node->next;
     if (node->next)
-        node->next->previous = node->previous;
+        node->next->prev = node->prev;
     else
-        list->last = node->previous;
+        list->last = node->prev;
     --(list->length);
 }
 
@@ -147,14 +133,16 @@ void linkedList_removeNode(LinkedList* list, LinkedListNode* node) {
  * @param node
  */
 void linkedList_deleteNode(LinkedList* list, LinkedListNode* node) {
-    if (node->previous)
-        node->previous->next = node->next;
+    if (!node) return;
+    
+    if (node->prev)
+        node->prev->next = node->next;
     else
         list->first = node->next;
     if (node->next)
-        node->next->previous = node->previous;
+        node->next->prev = node->prev;
     else
-        list->last = node->previous;
+        list->last = node->prev;
     --(list->length);
     if (node->freeFlag)
         __free(node->value);
@@ -178,6 +166,6 @@ void linkedList_freeA(LinkedList* list, void (*freeValue)(void* value)) {
     list->length = 0;
 }
 
-#endif /* WJCL_LINKED_LIST_TYPE_IMPLEMENTATION */
+#endif /* WJCL_LINKED_LIST_IMPLEMENTATION */
 
 #endif
