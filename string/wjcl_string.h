@@ -152,6 +152,6 @@ uint32_t strHashn(const char* str, uint32_t n) {
     return hash;
 }
 
-#endif /* WJL_STRING_IMPLEMENTATION */
+#endif /* WJCL_STRING_IMPLEMENTATION */
 
 #endif
