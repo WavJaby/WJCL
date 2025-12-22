@@ -54,10 +54,10 @@ typedef struct MapNode {
  * @param map Hash map
  * @param var Map entry variable name
  */
-#define map_entries(map, var)                                                            \
-    for (size_t __entryIndex = 0; __entryIndex < (map)->bucketSize; __entryIndex++)      \
-        for (MapNode* __bucket = (MapNode*)((map)->buckets + __entryIndex)->first, *var; \
-             __bucket ? (var = (MapNode*)((LinkedListNode*)__bucket)->value) : NULL;     \
+#define map_entries(map, var)                                                                   \
+    for (size_t __entryIndex = 0; __entryIndex < (map)->bucketSize; __entryIndex++)             \
+        for (MapNode* __bucket = (MapNode*)((map)->buckets + __entryIndex)->head->next, *var;    \
+             __bucket != (MapNode*)((map)->buckets + __entryIndex)->head && (var = (MapNode*)((LinkedListNode*)__bucket)->value);            \
              __bucket = (MapNode*)((LinkedListNode*)__bucket)->next)
 
 // Methods
@@ -72,7 +72,7 @@ MapNode* map_putpp(Map* map, void* key, void* value);
 void map_delete(Map* map, void* key);
 void* map_get(Map* map, void* key);
 void map_clear(Map* map);
-void map_free(Map* map);
+void map_free(const Map* map);
 
 // Implementation
 // #define WJCL_HASH_MAP_IMPLEMENTATION
@@ -81,13 +81,17 @@ void map_free(Map* map);
 #error "WJCL-HashMap require WJCL-LinkedList, use `#define WJCL_LINKED_LIST_IMPLEMENTATION` to import"
 #endif
 
-Map* map_new(MapNodeInfo info) {
+Map* map_new(const MapNodeInfo info) {
     Map* map = (Map*)__malloc(sizeof(Map));
     map->bucketSize = WJCL_HASH_MAP_DEFAULT_CAPACITY;
     map->buckets = (LinkedList*)__calloc(map->bucketSize, sizeof(LinkedList));
+    for (size_t i = 0; i < map->bucketSize; i++) {
+        LinkedList* bucket = map->buckets + i;
+        linkedList_init(bucket);
+    }
     map->size = 0;
     map->bukketUsed = 0;
-    map->expandSize = map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
+    map->expandSize = (size_t)((float)map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR);
     map->info = info;
     return map;
 }
@@ -101,30 +105,31 @@ void expandBucket(Map* map) {
         newLength = WJCL_HASH_MAP_DEFAULT_CAPACITY;
 
     // Expand buckets
-    map->expandSize = newLength * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
+    map->expandSize = (size_t)((float)newLength * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR);
     map->buckets = (LinkedList*)__realloc(map->buckets, newLength * sizeof(LinkedList));
-    memset(map->buckets + map->bucketSize, 0, (newLength - map->bucketSize) * sizeof(LinkedList));
+
+    for (size_t i = map->bucketSize; i < newLength; i++) {
+        LinkedList* bucket = map->buckets + i;
+        linkedList_init(bucket);
+    }
+    size_t oldBucketSize = map->bucketSize;
     map->bucketSize = newLength;
 
     // Rerange hashtable
-    for (size_t i = 0; i < map->bucketSize; i++) {
+    for (size_t i = 0; i < oldBucketSize; i++) {
         LinkedList* bucket = map->buckets + i;
         if (bucket->length == 0) continue;
-        LinkedListNode *node = bucket->first, *nextNode;
-        while (node) {
+        linkedList_foreach_safe(bucket, node, n) {
             MapNode* mapNode = (MapNode*)node->value;
             // Skip if stay at orignal place
             if ((mapNode->keyHash & (map->bucketSize - 1)) == i) {
-                node = node->next;
                 continue;
             }
-            nextNode = node->next;
             // Move node to destination bucket
             linkedList_removeNode(bucket, node);
             LinkedList* destBucket = map->buckets + (mapNode->keyHash & (map->bucketSize - 1));
             if (destBucket->length == 0) ++map->bukketUsed;
             linkedList_appendNode(destBucket, node);
-            node = nextNode;
         }
         if (bucket->length == 0)
             --map->bukketUsed;
@@ -136,12 +141,10 @@ LinkedListNode* map_getMapNode(Map* map, void* key, uint32_t hashCode) {
     LinkedList* list = map->buckets + (hashCode & (map->bucketSize - 1));
     if (list->length == 0) return NULL;
     // find
-    LinkedListNode* node = list->first;
-    while (node) {
+    linkedList_foreach(list, node) {
         MapNode* mapNode = (MapNode*)node->value;
         if (hashCode == mapNode->keyHash && map->info.equalsFunction(key, mapNode->key))
             return node;
-        node = node->next;
     }
     return NULL;
 }
@@ -162,8 +165,10 @@ MapNode* map_putpp(Map* map, void* key, void* value) {
     if (linkedListNode && linkedListNode->value) {
         node = (MapNode*)linkedListNode->value;
         if (map->info.onNodeDelete) map->info.onNodeDelete(node->key, node->value);
-        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) __free(node->key);
-        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) __free(node->value);
+        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY && node->key != key)
+            free(node->key);
+        if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE && node->value != value)
+            free(node->value);
         node->key = key;
         node->value = value;
     }
@@ -182,19 +187,21 @@ MapNode* map_putpp(Map* map, void* key, void* value) {
     return node;
 }
 
-static inline void map_freeMapNode(Map* map, MapNode* entry) {
+static inline void map_freeMapNode(const Map* map, MapNode* entry) {
     if (map->info.onNodeDelete) map->info.onNodeDelete(entry->key, entry->value);
-    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY) __free(entry->key);
-    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE) __free(entry->value);
+    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_KEY)
+        free(entry->key);
+    if (map->info.freeFlag & WJCL_HASH_MAP_FREE_VALUE)
+        free(entry->value);
 
     __free(entry);
 }
 
 void map_delete(Map* map, void* key) {
-    uint32_t hashCode = map->info.hashFunction(key);
+    const uint32_t hashCode = map->info.hashFunction(key);
     LinkedListNode* node = map_getMapNode(map, key, hashCode);
     if (!node) return;
-    map_freeMapNode(map, (MapNode*)node->value);
+    map_freeMapNode(map, node->value);
     LinkedList* list = map->buckets + (hashCode & (map->bucketSize - 1));
     linkedList_deleteNode(list, node);
     --map->size;
@@ -203,47 +210,48 @@ void map_delete(Map* map, void* key) {
 void map_clear(Map* map) {
     for (size_t i = 0; i < map->bucketSize; i++) {
         LinkedList* bucket = map->buckets + i;
-        LinkedListNode* node = bucket->first;
-        while (node) {
-            LinkedListNode* nextNode = node->next;
-            map_freeMapNode(map, (MapNode*)node->value);
+        linkedList_foreach_safe(bucket, node, n) {
+            map_freeMapNode(map, node->value);
             __free(node);
-            node = nextNode;
         }
+        bucket->head->next = bucket->head->prev = bucket->head;
+        bucket->length = 0;
     }
+
+    const size_t oldBucketSize = map->bucketSize;
     map->size = 0;
     map->bukketUsed = 0;
     map->bucketSize = WJCL_HASH_MAP_DEFAULT_CAPACITY;
-    map->expandSize = map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR;
+    map->expandSize = (size_t)((float)map->bucketSize * WJCL_HASH_MAP_DEFAULT_LOAD_FACTOR);
     map->buckets = (LinkedList*)__realloc(map->buckets, map->bucketSize * sizeof(LinkedList));
-    memset(map->buckets, 0, map->bucketSize * sizeof(LinkedList));
+
+    // Init bucket if the new bucket size is bigger
+    for (size_t i = oldBucketSize; i < map->bucketSize; i++) {
+        LinkedList* bucket = map->buckets + i;
+        linkedList_init(bucket);
+    }
 }
 
-void map_free(Map* map) {
+void map_free(const Map* map) {
     for (size_t i = 0; i < map->bucketSize; i++) {
-        LinkedList* bucket = map->buckets + i;
-        LinkedListNode* node = bucket->first;
-        while (node) {
-            LinkedListNode* nextNode = node->next;
+        const LinkedList* bucket = map->buckets + i;
+        linkedList_foreach_safe(bucket, node, n) {
             map_freeMapNode(map, (MapNode*)node->value);
             __free(node);
-            node = nextNode;
         }
     }
     __free(map->buckets);
 }
 
-void map_printTable(Map* map) {
+void map_printTable(const Map* map) {
     printf("\n");
     for (size_t i = 0; i < map->bucketSize; i++) {
         LinkedList* bucket = map->buckets + i;
         printf("%03d|", (int)i);
 
-        LinkedListNode* node = bucket->first;
-        while (node) {
-            MapNode* mapNode = (MapNode*)node->value;
+        linkedList_foreach(bucket, node) {
+            const MapNode* mapNode = node->value;
             printf("%p ", mapNode->value);
-            node = node->next;
         }
         printf("\n");
     }
