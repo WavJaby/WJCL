@@ -12,11 +12,14 @@ void* (*untrackedCalloc)(size_t __nmemb, size_t __size) = calloc;
 void* (*untrackedRealloc)(void* __ptr, size_t __size) = realloc;
 void (*untrackedFree)(void* __ptr) = free;
 
-#include "../map/wjcl_hash_map.h"
+void freeMem(void* ptr);
+
 #define malloc(size) newMem(__FILE__, __LINE__, size, untrackedMalloc(size))
 #define calloc(count, size) newMem(__FILE__, __LINE__, count* size, untrackedCalloc(count, size))
 #define realloc(ptr, size) reMem(__FILE__, __LINE__, ptr, size)
 #define free(ptr) freeMem(ptr);
+
+#include "../map/wjcl_hash_map.h"
 
 typedef struct MemInfo {
     const char* fileName;
