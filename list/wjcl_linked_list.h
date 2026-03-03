@@ -27,12 +27,29 @@ typedef struct LinkedList {
 /**
  * List should be init after creation, and can only use once
  * @param listptr LinkedList pointer
- */
-#define linkedList_init(listptr) \
-    (listptr)->head = (LinkedListNode*)__malloc(sizeof(LinkedListNode)); \
-    (listptr)->head->next = (listptr)->head->prev = (listptr)->head; \
-    (listptr)->length = 0
+*/
+static inline void linkedList_init(LinkedList* listptr) {
+    if (!listptr) return;
 
+    LinkedListNode* node = (LinkedListNode*)__malloc(sizeof(LinkedListNode));
+    if (!node) return;
+
+    *node = (LinkedListNode){
+        .next = node,
+        .prev = node,
+        .value = NULL,
+        .freeFlag = 0
+    };
+
+    listptr->head = node;
+    listptr->length = 0;
+}
+
+static inline LinkedList* linkedList_new() {
+    LinkedList* list = (LinkedList*)__malloc(sizeof(LinkedList));
+    linkedList_init(list);
+    return list;
+}
 
 /**
  * @brief Add a value to linked list
@@ -79,25 +96,17 @@ void linkedList_removeNode(LinkedList* list, LinkedListNode* node);
 void linkedList_clearA(LinkedList* list, void (*freeValue)(void* value));
 void linkedList_freeA(LinkedList* list, void (*freeValue)(void* value));
 
-LinkedList* linkedList_new();
 void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value);
 
 // Implementation
 // #define WJCL_LINKED_LIST_IMPLEMENTATION
 #ifdef WJCL_LINKED_LIST_IMPLEMENTATION
 
-LinkedList* linkedList_new() {
-    LinkedList* list = (LinkedList*)__malloc(sizeof(LinkedList));
-    list->head->next = list->head->prev = list->head;
-    list->length = 0;
-    return list;
-}
-
 void* linkedList_addp(LinkedList* list, uint8_t freeFlag, void* value) {
     LinkedListNode* node = (LinkedListNode*)__malloc(sizeof(LinkedListNode));
     node->freeFlag = freeFlag;
     node->value = value;
-    
+
     node->next = list->head;
     node->prev = list->head->prev;
     list->head->prev->next = node;
@@ -133,7 +142,7 @@ LinkedListNode* linkedList_getNode(LinkedList* list, size_t index) {
 
 void linkedList_removeNode(LinkedList* list, LinkedListNode* node) {
     if (!node || node == list->head) return;
-    
+
     node->prev->next = node->next;
     node->next->prev = node->prev;
     --(list->length);
@@ -146,7 +155,7 @@ void linkedList_removeNode(LinkedList* list, LinkedListNode* node) {
  */
 void linkedList_deleteNode(LinkedList* list, LinkedListNode* node) {
     if (!node || node == list->head) return;
-    
+
     node->prev->next = node->next;
     node->next->prev = node->prev;
     --(list->length);
