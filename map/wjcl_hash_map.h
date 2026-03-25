@@ -61,7 +61,7 @@ typedef struct MapNode {
              __bucket = (MapNode*)((LinkedListNode*)__bucket)->next)
 
 // Methods
-Map* map_new();
+Map* map_new(const MapNodeInfo info);
 /**
  * @brief Put key(pointer) value(pointer) to map
  * @param map Map pointer
